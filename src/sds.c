@@ -42,7 +42,7 @@ sds sdsnewlen(const void *init, size_t initlen) {
     if (init) {
         sh = zmalloc(sizeof(struct sdshdr)+initlen+1);
     } else {
-        sh = zcalloc(sizeof(struct sdshdr)+initlen+1);
+        sh = redis_zcalloc(sizeof(struct sdshdr)+initlen+1);
     }
     if (sh == NULL) return NULL;
     sh->len = initlen;

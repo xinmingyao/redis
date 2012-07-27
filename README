@@ -129,3 +129,7 @@ You'll be able to stop and start Redis using the script named
 /etc/init.d/redis_<portnumber>, for instance /etc/init.d/redis_6379.
 
 Enjoy!
+
+-----------------------------------------------------
+use redis as storage engine in erlang
+

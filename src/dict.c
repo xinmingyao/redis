@@ -32,7 +32,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-
+#include "redis.h"
 #include "fmacros.h"
 
 #include <stdio.h>
@@ -176,7 +176,7 @@ int dictExpand(dict *d, unsigned long size)
     /* Allocate the new hashtable and initialize all pointers to NULL */
     n.size = realsize;
     n.sizemask = realsize-1;
-    n.table = zcalloc(realsize*sizeof(dictEntry*));
+    n.table = redis_zcalloc(realsize*sizeof(dictEntry*));
     n.used = 0;
 
     /* Is this the first initialization? If so it's not really a rehashing
@@ -437,7 +437,6 @@ dictEntry *dictFind(dict *d, const void *key)
 {
     dictEntry *he;
     unsigned int h, idx, table;
-
     if (d->ht[0].size == 0) return NULL; /* We don't have a table at all */
     if (dictIsRehashing(d)) _dictRehashStep(d);
     h = dictHashKey(d, key);

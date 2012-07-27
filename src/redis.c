@@ -1169,15 +1169,19 @@ void initServerConfig() {
      * initial configuration, since command names may be changed via
      * redis.conf using the rename-command directive. */
     server.commands = dictCreate(&commandTableDictType,NULL);
+
     populateCommandTable();
+
     server.delCommand = lookupCommandByCString("del");
+
     server.multiCommand = lookupCommandByCString("multi");
+
     server.lpushCommand = lookupCommandByCString("lpush");
-    
+
     /* Slow log */
     server.slowlog_log_slower_than = REDIS_SLOWLOG_LOG_SLOWER_THAN;
     server.slowlog_max_len = REDIS_SLOWLOG_MAX_LEN;
-
+    redisLog(REDIS_WARNING, "a7 %d",server.dbnum);
     /* Debugging */
     server.assert_failed = "<no assertion failed>";
     server.assert_file = "<no file>";
@@ -1229,7 +1233,31 @@ void adjustOpenFilesLimit(void) {
         }
     }
 }
+void dump(int signo)
+{
+    void *array[30];
+    size_t size;
+    char **strings;
+    size_t i;
 
+    size = backtrace (array, 30);
+    strings = backtrace_symbols (array, size);
+
+    FILE* fd = fopen("error.txt","a");
+
+    fprintf (fd,"Obtained %zd stack frames.nm", size);
+    fflush(fd);
+
+    for (i = 0; i <= size; i++)
+    {
+        fprintf (fd,"%s\n", strings[i]);
+        fflush(fd);
+    }
+
+    fclose(fd);
+    free (strings);
+    exit(0);
+}
 void initServer() {
     int j;
 
@@ -1254,26 +1282,6 @@ void initServer() {
     server.el = aeCreateEventLoop(server.maxclients+1024);
     server.db = zmalloc(sizeof(redisDb)*server.dbnum);
 
-    if (server.port != 0) {
-        server.ipfd = anetTcpServer(server.neterr,server.port,server.bindaddr);
-        if (server.ipfd == ANET_ERR) {
-            redisLog(REDIS_WARNING, "Opening port %d: %s",
-                server.port, server.neterr);
-            exit(1);
-        }
-    }
-    if (server.unixsocket != NULL) {
-        unlink(server.unixsocket); /* don't care if this fails */
-        server.sofd = anetUnixServer(server.neterr,server.unixsocket,server.unixsocketperm);
-        if (server.sofd == ANET_ERR) {
-            redisLog(REDIS_WARNING, "Opening socket: %s", server.neterr);
-            exit(1);
-        }
-    }
-    if (server.ipfd < 0 && server.sofd < 0) {
-        redisLog(REDIS_WARNING, "Configured to not listen anywhere, exiting.");
-        exit(1);
-    }
     for (j = 0; j < server.dbnum; j++) {
         server.db[j].dict = dictCreate(&dbDictType,NULL);
         server.db[j].expires = dictCreate(&keyptrDictType,NULL);
@@ -2433,7 +2441,8 @@ void setupSignalHandlers(void) {
     sigemptyset(&act.sa_mask);
     act.sa_flags = SA_NODEFER | SA_RESETHAND | SA_SIGINFO;
     act.sa_sigaction = sigsegvHandler;
-    sigaction(SIGSEGV, &act, NULL);
+   signal(SIGSEGV, dump); 
+  // sigaction(SIGSEGV, &act, NULL);
     sigaction(SIGBUS, &act, NULL);
     sigaction(SIGFPE, &act, NULL);
     sigaction(SIGILL, &act, NULL);
@@ -2443,7 +2452,7 @@ void setupSignalHandlers(void) {
 
 void memtest(size_t megabytes, int passes);
 
-int main(int argc, char **argv) {
+int main1(int argc, char **argv) {
     long long start;
     struct timeval tv;
 
@@ -2504,7 +2513,7 @@ int main(int argc, char **argv) {
     if (server.daemonize) daemonize();
     initServer();
     if (server.daemonize) createPidFile();
-    redisAsciiArt();
+    //redisAsciiArt();
     redisLog(REDIS_WARNING,"Server started, Redis version " REDIS_VERSION);
 #ifdef __linux__
     linuxOvercommitMemoryWarning();
@@ -2532,4 +2541,45 @@ int main(int argc, char **argv) {
     return 0;
 }
 
+
+int main(int argc, char **argv) {
+  start_redis("/home/erlang/opensource/redis","dump.rdb",1);	
+}
+
+
+int start_redis(char *configfile,char *dbname,int is_open) {
+
+    long long start;
+    struct timeval tv;
+    
+    /* We need to initialize our libraries, and the server configuration. */
+    zmalloc_enable_thread_safeness();
+    srand(time(NULL)^getpid());
+    gettimeofday(&tv,NULL);
+    dictSetHashFunctionSeed(tv.tv_sec^tv.tv_usec^getpid());
+    initServerConfig();
+    loadServerConfig(configfile,NULL);
+    initServer();
+    redisAsciiArt();
+    redisLog(REDIS_WARNING,"Server started, Redis version " REDIS_VERSION);
+    // dbname get form erlang not form config
+	
+    server.rdb_filename = zstrdup(dbname);
+#ifdef __linux__
+    linuxOvercommitMemoryWarning();
+#endif
+    start = ustime();
+    if(is_open){
+        if (rdbLoad(server.rdb_filename) == REDIS_OK) {
+            redisLog(REDIS_NOTICE,"DB loaded from disk: %.3f seconds",
+                (float)(ustime()-start)/1000000);
+        } else if (errno != ENOENT) {
+            redisLog(REDIS_WARNING,"Fatal error loading the DB. Exiting.");
+            return -1;
+        }
+    }	
+    return 0;
+}
+
+/* The End */
 /* The End */
